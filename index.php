@@ -24,37 +24,6 @@ echo '<input type="radio" name="method" value="dice">Dice';
 echo '</div></form><br>';
 
 if(isset($_POST["crawls"])){
-	// $html = file_get_html("https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=" . str_replace(" ", "+", $_POST['keyword']));
-	// // echo $html;
-	// foreach ($html->find('div[class="gs_r gs_or gs_scl"]') as $journals) {
-	// 	$title = strip_tags($journals->find('h3[class="gs_rt"] a',0)->innertext);
-	// 	$authors = $journals->find('div[class="gs_a"]',0)->innertext;
-	// 	$link = $journals->find('a',0)->href;
-	// 	$numberCitation = explode(' ' ,($journals->find('div[class="gs_fl gs_flb"] a',2)->innertext));
-
-	// 	$linkAuthor = $journals->find('div[class="gs_ri"] div[class="gs_a"] a',0);
-
-	// 	if ($linkAuthor) {
-	// 		$linkAuthor = "https://scholar.google.com" . $linkAuthor->href;
-	// 		$htmlAuthor = file_get_html($linkAuthor);
-
-	// 		$journalAuthor = $htmlAuthor->find('tbody[id="gsc_a_b"]',0);
-
-	// 		foreach ($journalAuthor->find('tr[class="gsc_a_tr"]') as $journalsTitle) {
-	// 			$titleJournal = $journalsTitle->find('a[class="gsc_a_at"]',0)->innertext;
-
-	// 			if (strtolower($title) === strtolower($titleJournal)) {
-	// 				$linkJournal = "https://scholar.google.com" . $journalsTitle->find('a[class="gsc_a_at"]', 0)->href;
-	// 				$replace1 = str_replace('oe=ASCII', '', $linkJournal);
-	// 				$replace2 = str_replace('amp;', '', $replace1);
-
-	// 				$journal = file_get_html($replace2);
-	// 				$abstrak = $journal->find('div[class="gsh_csp"]',0)->innertext;
-	// 				break;
-	// 			}	
-	// 		}
-	// 	}
-
 	$sql = "SELECT * FROM training WHERE title LIKE ? OR abstract LIKE ?";
 	$stmt = $con->prepare($sql);
 	$keyword = "%".$_POST['keyword']."%";
@@ -118,6 +87,10 @@ if(isset($_POST["crawls"])){
 		}
 	}
 
+	usort($training_data, function($a, $b) {
+		return $a['title'] <=> $b['title'];
+	});
+
 	foreach ($training_data as $data) {
 		echo "Title : " . strip_tags($data['title']). "<br>";
 		echo "Authors : " . str_replace('&nbsp;', ' ', $data['authors']). "<br>";
@@ -126,5 +99,49 @@ if(isset($_POST["crawls"])){
 		echo "Similarity Scrore: " . $data['similarity'] . "<br>";
 		echo "<hr>";
 	}
+
+
+
+	$expansion = array();
+	$tfidf_total = array();
+	for ($i = 0; $i < 3; $i++) {
+		$expansion[] = $training_data[$i]['title']; 
+	}
+
+	$tf = new TokenCountVectorizer(new WhitespaceTokenizer());
+	$tf->fit($expansion);
+	$tf->transform($expansion);
+
+	$tfidf = new TfIdfTransformer($expansion);
+	$tfidf->transform($expansion);
+
+	$vocabulary = $tf->getVocabulary();
+
+	for ($i = 0; $i < count($vocabulary); $i++) {
+		$tfidf_total[$i] = 0;
+	}
+
+	for ($i = 0; $i < count($expansion); $i++) {
+		for ($j = 0; $j < count($vocabulary) - 1; $j++) {
+			$tfidf_total[$j] += $expansion[$i][$j];
+		}
+	}
+
+	usort($tfidf_total, function($a, $b) {
+		return $a <=> $b;
+	});
+
+	foreach ($tfidf_total as $key => $value) {
+		// if (!in_array(strtolower($vocabulary[$key]),$_POST['keyword'])) {
+		$expansion[] = $vocabulary[$key];
+		// }
+	}
+
+	echo "Related Search";
+	echo "<ul>";
+	for ($i=3; $i < count($expansion); $i++) { 
+		echo "<li>". $expansion[$i] . "</li>";
+	}
+	echo "</ul>";
 }
 ?>
